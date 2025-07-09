@@ -1,0 +1,253 @@
+{
+  "name": "xunit-tester",
+  "displayName": "xUnit Testing Extension",
+  "description": "Automatically creates test files for Controller & Service classes and shows test results in explorer",
+  "version": "0.0.1",
+  "publisher": "Binary Tech",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "colors": [
+      {
+        "id": "xunit.testPass",
+        "description": "The color for files where all tests passed.",
+        "defaults": {
+          "dark": "#4EC9B0",
+          "light": "#267F00",
+          "highContrast": "#379437"
+        }
+      },
+      {
+        "id": "xunit.testFail",
+        "description": "The color for files where one or more tests failed.",
+        "defaults": {
+          "dark": "#F14C4C",
+          "light": "#CD3532",
+          "highContrast": "#B52E31"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "controller-test-generator.generateTest",
+        "title": "Generate Test File",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "controller-test-generator.navigateToTestMethod",
+        "title": "Navigate to Test Method"
+      },
+      {
+        "command": "controller-test-generator.runAllTests",
+        "title": "Run All Tests",
+        "icon": "$(play)"
+      },
+      {
+        "command": "controller-test-generator.runCurrentFileTests",
+        "title": "Run Tests for This File",
+        "icon": "$(play-circle)"
+      },
+      {
+        "command": "controller-test-generator.runFileTests",
+        "title": "Run Tests",
+        "icon": "$(play-circle)"
+      },
+      {
+        "command": "controller-test-generator.runSimpleTest",
+        "title": "Run Simple Test (Debug)",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "controller-test-generator.runTestsInTerminal",
+        "title": "Run Tests in Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "controller-test-generator.testDecorations",
+        "title": "Test Decorations (Debug)",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "xunit-tester.refreshTestExplorer",
+        "title": "Refresh Test Explorer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "controller-test-generator.llmGenerateTests",
+        "title": "Generate Tests with GPT-4o-mini",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "controller-test-generator.runFolderTests",
+        "title": "Run Tests in Folder",
+        "icon": "$(play-circle)"
+      },
+      {
+        "command": "controller-test-generator.runSingleTest",
+        "title": "Run Single Test Method",
+        "icon": "$(play)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xunit-tester-container",
+          "title": "xUnit Tester",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "xunit-tester-container": [
+        {
+          "id": "xunitTestExplorer",
+          "name": "Test Files",
+          "contextualTitle": "xUnit Test Explorer"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/title": [
+        {
+          "command": "controller-test-generator.runAllTests",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "controller-test-generator.runAllTests",
+          "when": "view == xunitTestExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "xunit-tester.refreshTestExplorer",
+          "when": "view == xunitTestExplorer",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "controller-test-generator.runFileTests",
+          "when": "view == xunitTestExplorer && viewItem == 'testFile'",
+          "group": "inline"
+        },
+        {
+          "command": "controller-test-generator.llmGenerateTests",
+          "when": "view == xunitTestExplorer && viewItem == 'testFile'",
+          "group": "inline"
+        },
+        {
+          "command": "controller-test-generator.runFolderTests",
+          "when": "view == xunitTestExplorer && viewItem == 'testFolder'",
+          "group": "inline"
+        },
+        {
+          "command": "controller-test-generator.runSingleTest",
+          "when": "view == xunitTestExplorer && viewItem == 'testMethod'",
+          "group": "inline"
+        },
+        {
+          "command": "vscode.open",
+          "when": "view == xunitTestExplorer && viewItem == 'referencedFile'",
+          "group": "inline"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "controller-test-generator.runCurrentFileTests",
+          "when": "resourceExtname == '.cs' && resourceFilename =~ /.*Test.*\\.cs$/",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "controller-test-generator.runAllTests"
+        },
+        {
+          "command": "controller-test-generator.runCurrentFileTests",
+          "when": "resourceExtname == '.cs'"
+        },
+        {
+          "command": "controller-test-generator.runFileTests",
+          "when": "resourceExtname == '.cs'"
+        },
+        {
+          "command": "controller-test-generator.runSimpleTest"
+        },
+        {
+          "command": "controller-test-generator.runTestsInTerminal"
+        },
+        {
+          "command": "controller-test-generator.testDecorations"
+        },
+        {
+          "command": "controller-test-generator.generateTest"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "xUnit Tester",
+      "properties": {
+        "xunit-tester.projectRootPath": {
+          "type": "string",
+          "default": "",
+          "description": "The relative path from the workspace root to the folder containing your .sln or .csproj file. Example: 'src/MyProject'. Leave empty to use the workspace root."
+        },
+        "controllerTestGenerator.testDirectory": {
+          "type": "string",
+          "default": "Tests",
+          "description": "Directory where test files should be created (relative to the project root)"
+        },
+        "xunit-tester.resultsPath": {
+          "type": "string",
+          "default": "TestResults",
+          "description": "Directory where TRX test result files will be stored (relative to the project root)."
+        },
+        "controllerTestGenerator.openAIApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "If left blank the extension will read OPENAI_API_KEY from the environment."
+        },
+        "controllerTestGenerator.openAIApiTemp": {
+          "type": "float",
+          "default": 0.2,
+          "description": "The temperature setting for OpenAI API requests. Lower values make the output more deterministic."
+        },
+        "controllerTestGenerator.openAIApiMaxTokens": {
+          "type": "integer",
+          "default": 10000,
+          "description": "The maximum number of tokens to generate in the response from OpenAI. This is a soft limit and may be exceeded slightly."
+        },
+        "controllerTestGenerator.openAIApiModel": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "The OpenAI model to use for generating tests. Options include 'gpt-4o-mini', 'gpt-4', 'gpt-3.5-turbo', etc."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@types/xml2js": "^0.4.14",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "openai": "^4.104.0",
+    "xml2js": "^0.6.2"
+  }
+}
