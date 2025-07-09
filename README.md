@@ -33,6 +33,7 @@ This extension is designed to boost your productivity when working with xUnit in
 - **Context-Aware Commands**:
   - Run tests for the currently open file from the editor's title bar.
   - Run all tests from the Command Palette.
+  
 
 ---
 
