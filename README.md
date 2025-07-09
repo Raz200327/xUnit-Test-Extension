@@ -1,73 +1,235 @@
-# xUnit-Test-Extension# xUnit Testing Extension for VS Code
+# xUnit Testing Extension
 
-Streamline your .NET testing workflow with the xUnit Testing Extension. This extension provides a dedicated Test Explorer, automates the creation of test files for your controllers and services, and offers a simple interface to run your xUnit tests directly within Visual Studio Code.
+A powerful Visual Studio Code extension that enhances .NET testing workflows with intelligent test organization, execution, and AI-powered test generation.
 
-![xUnit Tester Demo](https://user-images.githubusercontent.com/1021434/230876936-234f9e05-3465-4a8f-84e6-bbc0322b724b.gif)  
-*(It's highly recommended to replace this placeholder GIF with a real one showing your extension in action!)*
+![xUnit Tester](https://img.shields.io/badge/VS%20Code-Extension-blue)
+![.NET](https://img.shields.io/badge/.NET-8.0-purple)
+![xUnit](https://img.shields.io/badge/xUnit-Testing-green)
 
----
+## ✨ Features
 
-## Features
+### 🗂️ **Smart Test Organization**
+- **Hierarchical Test Explorer**: Automatically organizes your test files into `Controllers` and `Services` folders
+- **Visual Status Indicators**: See pass/fail status at a glance with color-coded icons and counts
+- **Failed Test Drilling**: Expand failed test files to see individual failing test methods
 
-This extension is designed to boost your productivity when working with xUnit in a .NET project.
+### 🔍 **Intelligent Failure Analysis**
+- **Method-Level Details**: View exactly which test methods failed within a file
+- **Source File Detection**: Automatically discovers and displays the source files referenced by failing tests
+- **Smart Navigation**: Click on test methods to jump directly to the failing test code
 
-### 🧪 Dedicated Test Explorer
+### ⚡ **Flexible Test Execution**
+- **Run All Tests**: Execute your entire test suite with one click
+- **Category Testing**: Run all Controller tests or all Service tests separately  
+- **File-Level Testing**: Run tests for a specific test file
+- **Method-Level Testing**: Execute individual failing test methods
+- **Terminal Integration**: Run tests in the integrated terminal when needed
 
-- **Focused View**: A new "xUnit Tester" icon appears in the Activity Bar, opening a view that lists *only* your test files (any file ending in `Tests.cs`).
-- **One-Click Test Execution**: Run tests for a specific file by clicking the play icon that appears on hover.
-- **Run All Tests**: A "Run All Tests" button is available at the top of the view to execute your entire test suite.
-- **Auto-Refresh**: The explorer automatically updates when you create, delete, or rename test files. A manual refresh button is also provided.
+### 🤖 **AI-Powered Test Generation**
+- **GPT Integration**: Generate comprehensive test files using OpenAI's GPT models
+- **Context-Aware**: Uses existing test files as examples for consistent coding style
+- **Live Streaming**: Watch your tests being generated in real-time
+- **Smart Templates**: Automatically creates test file templates for new Controllers and Services
 
-![Test Explorer Screenshot](https://user-images.githubusercontent.com/1021434/230877028-1b7f7318-c21c-4375-9e63-71a74d7c07e2.png)
+### 🎯 **Developer Experience**
+- **Real-time Updates**: Test results update automatically as you run tests
+- **File Decorations**: See test status directly in the file explorer
+- **Error Tooltips**: Hover over failed tests to see error messages
+- **Quick Actions**: Right-click context menus for common operations
 
-### 📄 Automatic Test File Generation
+## 📦 Installation
 
-- **Smart Detection**: Automatically creates a corresponding test file when you create a new C# file ending in `Controller.cs` or `Service.cs`.
-- **Organized Structure**: New test files are placed in a configurable test directory, under `Controllers` or `Services` subfolders.
-- **Boilerplate Content**: The generated test file includes a basic xUnit class structure, `using` statements, and a sample test method to get you started immediately.
-- **Manual Generation**: Right-click any `Controller.cs` or `Service.cs` file in the main File Explorer and select "Generate Test File" to create one on demand.
+1. Open Visual Studio Code
+2. Go to the Extensions view (`Ctrl+Shift+X`)
+3. Search for "xUnit Testing Extension"
+4. Click Install
 
-### ⚙️ Seamless Test Runner
+## 🚀 Quick Start
 
-- **Integrated Output**: Test results are displayed in a dedicated "Test Runner" output channel, showing the full `dotnet test` command and its results.
-- **Context-Aware Commands**:
-  - Run tests for the currently open file from the editor's title bar.
-  - Run all tests from the Command Palette.
-  
+1. **Open a .NET project** with xUnit tests
+2. **View the Test Explorer** in the Activity Bar (look for the checklist icon)
+3. **Run tests** by clicking the play button next to any folder or file
+4. **Explore failures** by expanding failed test files to see individual methods
+5. **Navigate to code** by clicking on test methods or referenced files
 
----
+## 🏗️ Project Structure
 
-## Getting Started
+The extension works best with this recommended structure:
 
-1.  **Install the Extension**: Install "xUnit Testing Extension" from the Visual Studio Code Marketplace.
-2.  **Open a .NET Project**: Open a folder containing your .NET solution.
-3.  **Find the Test Explorer**: Click the new **beaker** (`🧪`) icon in the Activity Bar to open the xUnit Test Explorer.
-4.  **Run Tests**:
-    - Click the main play button at the top of the Test Explorer to run all tests.
-    - Hover over a file in the list and click the inline play button to run tests for just that file.
-5.  **Generate Tests**:
-    - Create a new file, e.g., `ProductsController.cs`. The extension will automatically create `Tests/Controllers/ProductsControllerTests.cs`.
-    - Or, right-click an existing `ProductsController.cs` and choose "Generate Test File".
+```
+YourProject/
+├── Controllers/
+│   ├── UserController.cs
+│   └── ProductController.cs
+├── Services/
+│   ├── UserService.cs
+│   └── ProductService.cs
+└── Tests/
+    ├── Controllers/
+    │   ├── UserControllerTests.cs
+    │   └── ProductControllerTests.cs
+    └── Services/
+        ├── UserServiceTests.cs
+        └── ProductServiceTests.cs
+```
 
----
+## ⚙️ Configuration
 
-## Requirements
+### Required Settings
 
-- [.NET SDK](https://dotnet.microsoft.com/download) must be installed and available in your system's PATH.
-- Your project must be configured to use [xUnit](https://xunit.net/).
-- The `dotnet test` command must be able to run successfully from your workspace's root directory.
+For AI test generation, configure your OpenAI API key:
 
----
-
-## Extension Settings
-
-You can configure the extension's behavior by modifying the following settings in your `settings.json` file:
-
--   **`controllerTestGenerator.testDirectory`**: Specifies the name of the root directory where test files should be created.
-    -   **Default**: `"Tests"`
-
-**Example `/.vscode/settings.json`:**
 ```json
 {
-  "controllerTestGenerator.testDirectory": "MyProject.UnitTests"
+  "controllerTestGenerator.openAIApiKey": "your-api-key-here"
 }
+```
+
+### Optional Settings
+
+```json
+{
+  // Project structure
+  "xunit-tester.projectRootPath": "",
+  "controllerTestGenerator.testDirectory": "Tests",
+  "xunit-tester.resultsPath": "TestResults",
+  
+  // AI Configuration
+  "controllerTestGenerator.openAIApiModel": "gpt-4o-mini",
+  "controllerTestGenerator.openAIApiTemp": 0.2,
+  "controllerTestGenerator.openAIApiMaxTokens": 10000
+}
+```
+
+## 🎮 Commands
+
+| Command | Description |
+|---------|-------------|
+| `Run All Tests` | Execute all tests in the project |
+| `Run Tests in Folder` | Run all Controller or Service tests |
+| `Run Tests for File` | Execute tests in a specific file |
+| `Run Single Test Method` | Execute an individual test method |
+| `Generate Tests with AI` | Create tests using GPT |
+| `Generate Test File` | Create a basic test template |
+| `Refresh Test Explorer` | Reload the test tree view |
+| `Clear Test Results` | Reset all test status indicators |
+
+## 🖱️ Usage Examples
+
+### Running Tests
+
+**Folder Level:**
+```
+✅ Controllers (25) ← Click play button to run all Controller tests
+├── ✅ UserControllerTests.cs
+└── ❌ ProductControllerTests.cs (2 failed)
+```
+
+**Method Level:**
+```
+❌ UserServiceTests.cs (1 failed)
+  └── ❌ GetAllUsersAsync_ShouldReturnAllUsers ← Click to navigate to method
+      ├── 📄 UserService.cs ← Click to view source file
+      └── 📄 IUserRepository.cs
+```
+
+### Test Generation
+
+1. Right-click on a test file in the explorer
+2. Select "Generate Tests with GPT-4o-mini"
+3. Watch as comprehensive tests are generated in real-time
+4. Review and customize the generated tests
+
+### Navigation
+
+- **Click test methods** → Jump directly to the test code
+- **Click source files** → Open referenced implementation files
+- **Hover over failures** → See error messages and stack traces
+
+## 🔧 Development
+
+### Prerequisites
+
+- Node.js 16.x or higher
+- Visual Studio Code 1.74.0 or higher
+- .NET 8 SDK
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd xunit-testing-extension
+
+# Install dependencies
+npm install
+
+# Compile TypeScript
+npm run compile
+
+# Package the extension (optional)
+vsce package
+```
+
+### Project Structure
+
+```
+src/
+├── extension.ts              # Main extension entry point
+├── TestExplorerProvider.ts   # Tree view and test organization
+├── TestResultDecorationProvider.ts  # File decorations
+└── package.json             # Extension manifest
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please feel free to submit issues and pull requests.
+
+### Development Guidelines
+
+1. Follow TypeScript best practices
+2. Add tests for new features
+3. Update documentation for user-facing changes
+4. Use meaningful commit messages
+
+## 📋 Requirements
+
+- **.NET 8 or higher**: For running xUnit tests
+- **xUnit Framework**: Test framework dependency
+- **OpenAI API Key**: Required for AI test generation features (optional)
+
+## 🐛 Known Issues
+
+- Test file categorization requires either folder structure or naming conventions
+- AI test generation requires internet connection and OpenAI API access
+- Very large test suites may experience performance impacts
+
+## 📚 FAQ
+
+**Q: How does the extension categorize tests?**
+A: Tests are categorized by folder structure (Controllers/, Services/) or by naming convention (ControllerTests, ServiceTests).
+
+**Q: Can I use this without OpenAI?**
+A: Yes! The AI features are optional. All test execution and organization features work without an API key.
+
+**Q: Does this work with other test frameworks?**
+A: Currently optimized for xUnit, but basic functionality works with other .NET test frameworks.
+
+**Q: How do I configure the project root?**
+A: Set `xunit-tester.projectRootPath` to point to your solution or project folder.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built for the .NET and xUnit testing community
+- Powered by OpenAI's GPT models for AI features
+- Inspired by modern testing workflows and developer productivity tools
+
+---
+
+**Happy Testing!** 🧪✨
+
+For support, feature requests, or bug reports, please visit our [GitHub repository](https://github.com/your-repo/xunit-testing-extension).
