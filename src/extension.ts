@@ -8,6 +8,51 @@ import { TestResultDecorationProvider } from './TestResultDecorationProvider';
 import { parseStringPromise as parseXml } from 'xml2js';
 import OpenAI from "openai";
 
+interface TestMethodEntry {
+    MethodName: string;
+    ClassName: string;
+    FilePath: string;
+    Outcome: 'Passed' | 'Failed' | 'Skipped';
+    Duration?: string;
+    ErrorMessage?: string;
+    StackTrace?: string;
+}
+
+interface TestRunSummary {
+    TotalTests: number;
+    PassedTests: number;
+    FailedTests: number;
+    SkippedTests: number;
+    Duration?: string;
+    TestRunner: string;
+    RunType: 'AllTests' | 'FileTests' | 'FolderTests' | 'SingleMethod';
+    TargetFile?: string;
+    TargetFolder?: string;
+    TargetMethod?: string;
+}
+
+interface TestDatabaseEntry {
+    Timestamp: string;
+    RunId: string;
+    Summary: TestRunSummary;
+    TestMethods: TestMethodEntry[];
+    FilesInvolved: string[];
+    ProjectRoot: string;
+    Success: boolean;
+    Message: string;
+    TrxFilePath?: string;
+    CommandExecuted?: string;
+}
+
+interface TestDatabase {
+    Version: string;
+    Created: string;
+    LastUpdated: string;
+    TotalRuns: number;
+    Tests: TestDatabaseEntry[];
+}
+
+
 const execAsync = promisify(exec);
 let decorationProvider: TestResultDecorationProvider;
 let outputChannel: vscode.OutputChannel;
@@ -31,12 +76,60 @@ async function getProjectRoot(): Promise<vscode.Uri | undefined> {
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
             return vscode.Uri.file(fullPath);
         } else {
-            vscode.window.showWarningMessage(`The configured 'projectRootPath' ("${projectRootSetting}") does not exist. Falling back to workspace root.`);
+            vscode.window.showWarningMessage(`The configured 'projectRootPath' ("${projectRootSetting}") does not exist. Falling back to auto-detection.`);
+        }
+    }
+
+    // Try to find a solution file (.sln) in the workspace
+    const solutionFiles = await vscode.workspace.findFiles('**/*.sln', '**/node_modules/**', 5);
+    if (solutionFiles.length > 0) {
+        // Use the directory containing the first solution file found
+        const solutionDir = path.dirname(solutionFiles[0].fsPath);
+        console.log(`Found solution file at: ${solutionFiles[0].fsPath}, using directory: ${solutionDir}`);
+        return vscode.Uri.file(solutionDir);
+    }
+
+    // If no solution file found, try to find the common parent directory of all test projects
+    const testFiles = await vscode.workspace.findFiles('**/*Tests.cs', '**/node_modules/**');
+    if (testFiles.length > 0) {
+        // Find the shortest common path that contains all test files
+        const testDirs = testFiles.map(file => path.dirname(file.fsPath));
+        const commonPath = findCommonParentDirectory(testDirs);
+        
+        // Go up one level from the common test directory to find the likely solution root
+        const potentialRoot = path.dirname(commonPath);
+        if (fs.existsSync(potentialRoot) && fs.statSync(potentialRoot).isDirectory()) {
+            console.log(`Inferred project root from test files: ${potentialRoot}`);
+            return vscode.Uri.file(potentialRoot);
         }
     }
 
     // Fallback to the main workspace folder
+    console.log(`Using workspace root as fallback: ${mainWorkspaceFolder.uri.fsPath}`);
     return mainWorkspaceFolder.uri;
+}
+
+/**
+ * Finds the common parent directory of a list of directory paths
+ */
+function findCommonParentDirectory(directories: string[]): string {
+    if (directories.length === 0) return '';
+    if (directories.length === 1) return directories[0];
+
+    const pathSegments = directories.map(dir => dir.split(path.sep));
+    const minLength = Math.min(...pathSegments.map(segments => segments.length));
+    
+    let commonSegments: string[] = [];
+    for (let i = 0; i < minLength; i++) {
+        const segment = pathSegments[0][i];
+        if (pathSegments.every(segments => segments[i] === segment)) {
+            commonSegments.push(segment);
+        } else {
+            break;
+        }
+    }
+    
+    return commonSegments.join(path.sep);
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -448,7 +541,17 @@ async function runSingleTestMethod(methodName: string, testFilePath: string, pro
                 newResultFiles.sort((a, b) => fs.statSync(b.fsPath).mtimeMs - fs.statSync(a.fsPath).mtimeMs);
                 const trxFilePath = newResultFiles[0].fsPath;
                 outputChannel.appendLine(`\n✅ Found TRX file: ${trxFilePath}`);
-                await parseResultsAndUpdateDecorations(trxFilePath, undefined, provider);
+                await parseResultsAndUpdateDecorations(
+                    trxFilePath, 
+                    undefined, 
+                    provider, 
+                    'SingleMethod', 
+                    { 
+                        method: methodName, 
+                        file: path.basename(testFilePath) 
+                    }, 
+                    testCommand
+                );
                 vscode.window.showInformationMessage(`Single test ${methodName} execution finished.`);
             } else {
                 vscode.window.showErrorMessage('Test completed but no TRX result file was found. Check the output for errors.');
@@ -521,7 +624,14 @@ async function runTestsAndUpdateDecorations(fileUri: vscode.Uri | undefined, pro
                 newResultFiles.sort((a, b) => fs.statSync(b.fsPath).mtimeMs - fs.statSync(a.fsPath).mtimeMs);
                 const trxFilePath = newResultFiles[0].fsPath;
                 outputChannel.appendLine(`\n✅ Found TRX file: ${trxFilePath}`);
-                await parseResultsAndUpdateDecorations(trxFilePath, fileUri, provider);
+                await parseResultsAndUpdateDecorations(
+                    trxFilePath, 
+                    fileUri, 
+                    provider, 
+                    fileUri ? 'FileTests' : 'AllTests', 
+                    fileUri ? { file: path.basename(fileUri.fsPath) } : undefined, 
+                    testCommand
+                );
                 vscode.window.showInformationMessage('Test run finished.');
             } else {
                 vscode.window.showErrorMessage('Test completed but no TRX result file was found. Check the output for errors.');
@@ -612,7 +722,14 @@ async function runFolderTests(folderName: string, provider: TestExplorerProvider
                 newResultFiles.sort((a, b) => fs.statSync(b.fsPath).mtimeMs - fs.statSync(a.fsPath).mtimeMs);
                 const trxFilePath = newResultFiles[0].fsPath;
                 outputChannel.appendLine(`\n✅ Found TRX file: ${trxFilePath}`);
-                await parseResultsAndUpdateDecorations(trxFilePath, undefined, provider);
+                await parseResultsAndUpdateDecorations(
+                        trxFilePath, 
+                        undefined, 
+                        provider, 
+                        'FolderTests', 
+                        { folder: cleanFolderName }, 
+                        testCommand
+                    );
                 vscode.window.showInformationMessage(`${cleanFolderName} test run finished.`);
             } else {
                 vscode.window.showErrorMessage('Test completed but no TRX result file was found. Check the output for errors.');
@@ -659,8 +776,211 @@ function categorizeTestFile(fileUri: vscode.Uri): string {
     return 'Controllers';
 }
 
+async function saveTestResultsToDatabase(
+    testResults: TestFileResult[], 
+    projectRootPath: string,
+    runType: 'AllTests' | 'FileTests' | 'FolderTests' | 'SingleMethod',
+    targetInfo?: { file?: string; folder?: string; method?: string },
+    commandExecuted?: string,
+    trxFilePath?: string
+): Promise<void> {
+    try {
+        const databasePath = path.join(projectRootPath, 'database.json');
+        const timestamp = new Date().toISOString();
+        const runId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Read existing database or create new one
+        let database: TestDatabase;
+        
+        if (fs.existsSync(databasePath)) {
+            try {
+                const existingData = await fs.promises.readFile(databasePath, 'utf8');
+                const parsed = JSON.parse(existingData);
+                
+                // Migrate old format or ensure correct structure
+                if (parsed.Tests && Array.isArray(parsed.Tests)) {
+                    database = {
+                        Version: parsed.Version || "1.0",
+                        Created: parsed.Created || timestamp,
+                        LastUpdated: timestamp,
+                        TotalRuns: parsed.TotalRuns || parsed.Tests.length,
+                        Tests: parsed.Tests
+                    };
+                } else {
+                    database = {
+                        Version: "1.0",
+                        Created: timestamp,
+                        LastUpdated: timestamp,
+                        TotalRuns: 0,
+                        Tests: []
+                    };
+                }
+            } catch (parseError) {
+                console.warn('Could not parse existing database.json, creating new one:', parseError);
+                database = {
+                    Version: "1.0",
+                    Created: timestamp,
+                    LastUpdated: timestamp,
+                    TotalRuns: 0,
+                    Tests: []
+                };
+            }
+        } else {
+            database = {
+                Version: "1.0",
+                Created: timestamp,
+                LastUpdated: timestamp,
+                TotalRuns: 0,
+                Tests: []
+            };
+        }
+        
+        // Calculate summary statistics
+        let totalTests = 0;
+        let passedTests = 0;
+        let failedTests = 0;
+        let skippedTests = 0;
+        const testMethods: TestMethodEntry[] = [];
+        const filesInvolved = new Set<string>();
+        
+        // Process each test file result
+        for (const fileResult of testResults) {
+            filesInvolved.add(fileResult.filePath);
+            
+            if (fileResult.methods && fileResult.methods.length > 0) {
+                // Process individual test methods
+                for (const method of fileResult.methods) {
+                    totalTests++;
+                    
+                    const methodEntry: TestMethodEntry = {
+                        MethodName: method.methodName,
+                        ClassName: path.basename(fileResult.filePath, '.cs'),
+                        FilePath: fileResult.filePath,
+                        Outcome: method.outcome,
+                        ErrorMessage: method.errorMessage,
+                        StackTrace: method.errorMessage // In case we want to separate these later
+                    };
+                    
+                    testMethods.push(methodEntry);
+                    
+                    if (method.outcome === 'Passed') {
+                        passedTests++;
+                    } else if (method.outcome === 'Failed') {
+                        failedTests++;
+                    } else {
+                        skippedTests++;
+                    }
+                }
+            } else {
+                // File-level results (fallback when method details aren't available)
+                totalTests += fileResult.counts.passed + fileResult.counts.failed;
+                passedTests += fileResult.counts.passed;
+                failedTests += fileResult.counts.failed;
+                
+                // Create a summary entry for the file
+                if (totalTests > 0) {
+                    const fileEntry: TestMethodEntry = {
+                        MethodName: `[File Summary: ${fileResult.counts.passed + fileResult.counts.failed} tests]`,
+                        ClassName: path.basename(fileResult.filePath, '.cs'),
+                        FilePath: fileResult.filePath,
+                        Outcome: fileResult.state === 'pass' ? 'Passed' : 'Failed',
+                        ErrorMessage: fileResult.state === 'fail' ? `${fileResult.counts.failed} test(s) failed in this file` : undefined
+                    };
+                    testMethods.push(fileEntry);
+                }
+            }
+        }
+        
+        // Create summary
+        const summary: TestRunSummary = {
+            TotalTests: totalTests,
+            PassedTests: passedTests,
+            FailedTests: failedTests,
+            SkippedTests: skippedTests,
+            TestRunner: "dotnet test",
+            RunType: runType,
+            TargetFile: targetInfo?.file,
+            TargetFolder: targetInfo?.folder,
+            TargetMethod: targetInfo?.method
+        };
+        
+        // Create descriptive message
+        let message = '';
+        switch (runType) {
+            case 'AllTests':
+                message = `Ran all tests: ${passedTests} passed, ${failedTests} failed`;
+                break;
+            case 'FileTests':
+                message = `Ran tests in ${targetInfo?.file}: ${passedTests} passed, ${failedTests} failed`;
+                break;
+            case 'FolderTests':
+                message = `Ran tests in ${targetInfo?.folder} folder: ${passedTests} passed, ${failedTests} failed`;
+                break;
+            case 'SingleMethod':
+                message = `Ran single test ${targetInfo?.method}: ${passedTests > 0 ? 'PASSED' : 'FAILED'}`;
+                break;
+        }
+        
+        // Create main database entry
+        const entry: TestDatabaseEntry = {
+            Timestamp: timestamp,
+            RunId: runId,
+            Summary: summary,
+            TestMethods: testMethods,
+            FilesInvolved: Array.from(filesInvolved),
+            ProjectRoot: projectRootPath,
+            Success: failedTests === 0,
+            Message: message,
+            TrxFilePath: trxFilePath,
+            CommandExecuted: commandExecuted
+        };
+        
+        // Add to database
+        database.Tests.push(entry);
+        database.TotalRuns = database.Tests.length;
+        database.LastUpdated = timestamp;
+        
+        // Write updated database back to file with pretty formatting
+        await fs.promises.writeFile(databasePath, JSON.stringify(database, null, 2), 'utf8');
+        
+        // Enhanced logging output
+        outputChannel.appendLine(`📊 === TEST RUN SUMMARY ===`);
+        outputChannel.appendLine(`🆔 Run ID: ${runId}`);
+        outputChannel.appendLine(`📁 Run Type: ${runType}`);
+        outputChannel.appendLine(`📈 Results: ${passedTests} passed, ${failedTests} failed, ${skippedTests} skipped`);
+        outputChannel.appendLine(`📂 Files Involved: ${filesInvolved.size}`);
+        outputChannel.appendLine(`💾 Database: ${database.Tests.length} total runs stored`);
+        outputChannel.appendLine(`✅ Test results saved to database.json`);
+        
+        // Show user notification for significant failures
+        if (failedTests > 0) {
+            const failedMethodNames = testMethods
+                .filter(m => m.Outcome === 'Failed')
+                .map(m => m.MethodName)
+                .slice(0, 3); // Show first 3 failed tests
+            
+            const moreFailures = failedTests > 3 ? ` (and ${failedTests - 3} more)` : '';
+            vscode.window.showWarningMessage(
+                `${failedTests} test(s) failed: ${failedMethodNames.join(', ')}${moreFailures}`
+            );
+        }
+        
+    } catch (error) {
+        console.error('Error saving test results to database:', error);
+        outputChannel.appendLine(`❌ Error saving test results to database: ${error}`);
+        vscode.window.showErrorMessage(`Failed to save test results to database: ${error}`);
+    }
+}
 
-async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vscode.Uri | undefined, testExplorerProvider: TestExplorerProvider) {
+// Enhanced parseResultsAndUpdateDecorations function with database integration
+async function parseResultsAndUpdateDecorations(
+    trxFilePath: string, 
+    fileUri: vscode.Uri | undefined, 
+    testExplorerProvider: TestExplorerProvider,
+    runType: 'AllTests' | 'FileTests' | 'FolderTests' | 'SingleMethod' = 'AllTests',
+    targetInfo?: { file?: string; folder?: string; method?: string },
+    commandExecuted?: string
+) {
     try {
         outputChannel.appendLine(`\n--- Parsing Test Results ---`);
         outputChannel.appendLine(`Reading TRX file: ${trxFilePath}`);
@@ -694,10 +1014,6 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
 
             if (!testDef) continue;
 
-            // Debug logging to see both structures
-            // console.log('TestResult structure:', JSON.stringify(testResult.$, null, 2));
-            // console.log('TestDef structure:', JSON.stringify(testDef, null, 2));
-
             const fullClassName = testDef.TestMethod[0].$.className.split(',')[0];
             const testClassName = fullClassName.split('.').pop();
             
@@ -709,7 +1025,6 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
             
             // If still no method name, try extracting from testResult testName
             if (!methodName && testResult.$.testName) {
-                // testName might be in format "FullClassName.MethodName"
                 const parts = testResult.$.testName.split('.');
                 methodName = parts[parts.length - 1];
             }
@@ -717,13 +1032,11 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
             // Clean up method name - remove namespace prefix if present
             if (methodName && methodName.includes('.')) {
                 const parts = methodName.split('.');
-                methodName = parts[parts.length - 1]; // Take just the last part (actual method name)
+                methodName = parts[parts.length - 1];
             }
             
-            // console.log(`Final extracted method name: "${methodName}"`);
             outputChannel.appendLine(`  Method: ${methodName}, Outcome: ${outcome}`);
             
-            // Skip if we couldn't determine the method name properly
             if (!methodName) {
                 outputChannel.appendLine(`  WARNING: Could not determine method name for test ${testId}`);
                 continue;
@@ -734,7 +1047,6 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
             // Get error message if test failed
             let errorMessage: string | undefined;
             if (outcome === 'Failed') {
-                // Try multiple paths for error message
                 if (testResult.Output?.[0]?.ErrorInfo?.[0]?.Message?.[0]) {
                     errorMessage = testResult.Output[0].ErrorInfo[0].Message[0];
                 } else if (testResult.Output?.[0]?.ErrorInfo?.[0]?.StackTrace?.[0]) {
@@ -744,8 +1056,6 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
                 } else {
                     errorMessage = `Test ${methodName} failed`;
                 }
-                
-                // console.log(`Error message for ${methodName}:`, errorMessage?.substring(0, 200) + '...');
             }
 
             const globPattern = `**/${testClassName}.cs`;
@@ -755,11 +1065,10 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
                 const fileUri = matchingFiles[0];
                 const filePath = fileUri.fsPath;
                 
-                // Initialize file result if not exists
                 if (!fileTestResults.has(filePath)) {
                     fileTestResults.set(filePath, {
                         filePath,
-                        state: 'pass', // Will be updated to 'fail' if any test fails
+                        state: 'pass',
                         counts: { passed: 0, failed: 0 },
                         methods: []
                     });
@@ -767,17 +1076,15 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
                 
                 const fileResult = fileTestResults.get(filePath)!;
                 
-                // Create method result
                 const methodResult: TestMethodResult = {
                     methodName,
                     outcome: outcome as 'Passed' | 'Failed',
                     errorMessage,
-                    referencedFiles: [] // Will be populated when expanded
+                    referencedFiles: []
                 };
                 
                 fileResult.methods.push(methodResult);
                 
-                // Update counts and overall state
                 if (outcome === 'Failed') {
                     fileResult.state = 'fail';
                     fileResult.counts.failed++;
@@ -789,26 +1096,35 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
         
         outputChannel.appendLine("\n--- Updating Decorations and Test Explorer ---");
         
-        // Convert to array for the tree provider
         const testResults = Array.from(fileTestResults.values());
         
-        // Update the enhanced tree provider with method-level results
         testExplorerProvider.updateTestMethodResults(testResults);
         
-        // Update decorations (still file-level)
         for (const fileResult of testResults) {
             const uri = vscode.Uri.file(fileResult.filePath);
             const counts = fileResult.counts;
             
             outputChannel.appendLine(`Updating: ${path.basename(fileResult.filePath)} -> ${fileResult.state.toUpperCase()} (${counts.passed} passed, ${counts.failed} failed)`);
             
-            // Log failed methods for debugging
             const failedMethods = fileResult.methods.filter(m => m.outcome === 'Failed');
             if (failedMethods.length > 0) {
                 outputChannel.appendLine(`  Failed methods: ${failedMethods.map(m => m.methodName).join(', ')}`);
             }
             
             decorationProvider.updateState(uri, fileResult.state);
+        }
+
+        // 🆕 SAVE ENHANCED TEST RESULTS TO DATABASE
+        const projectRootUri = await getProjectRoot();
+        if (projectRootUri && testResults.length > 0) {
+            await saveTestResultsToDatabase(
+                testResults, 
+                projectRootUri.fsPath, 
+                runType, 
+                targetInfo, 
+                commandExecuted, 
+                trxFilePath
+            );
         }
         
         outputChannel.appendLine("---------------------------\n");
@@ -819,8 +1135,6 @@ async function parseResultsAndUpdateDecorations(trxFilePath: string, fileUri: vs
         outputChannel.appendLine(`[FATAL ERROR] Error during parsing: ${e.message}`);
     }
 }
-
-
 // --- Test Generation Logic ---
 
 async function handleFileCreation(uri: vscode.Uri) {
