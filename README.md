@@ -44,12 +44,6 @@ A powerful Visual Studio Code extension that enhances .NET testing workflows wit
 
 ## 📦 Installation
 
-### From VS Code Marketplace
-1. Open Visual Studio Code
-2. Go to the Extensions view (`Ctrl+Shift+X` or `Cmd+Shift+X`)
-3. Search for "xUnit Testing Extension"
-4. Click Install
-
 ### From VSIX Package
 1. Download the `.vsix` file from the releases
 2. In VS Code, go to Extensions view
